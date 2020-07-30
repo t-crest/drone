@@ -1,0 +1,3 @@
+# Ignore Raffo parameter and report file
+raffo_params.h
+raffo_params.md

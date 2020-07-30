@@ -49,7 +49,7 @@
 #define DELTA_T         0x4EC4EC4F  // 1/208 with a scaling factor of 2^38
 #define DELTA_T_SCALE   38
 
-#define SQ(a, n)    fix_mul(a, a, n)
+#define SQ(a, n)    fix32_mul(a, a, n)
 
 // attitude quaternion; scaling factor 2^30, initialized to (1,0,0,0):
 static int32_t q1 = 1<<30, q2 = 0, q3 = 0, q4 = 0;
@@ -73,14 +73,14 @@ void ahrs_update(int32_t a_x, int32_t a_y, int32_t a_z,
         // calculate inverse norm; shifting by 34 bits after multiplying avoids
         // arithmetic overflow (also while summing); so initialize scale to 34:
         int32_t invn; int scale = 34;
-        invn = fix_invsqrt(SQ(a_x, 34) + SQ(a_y, 34) + SQ(a_z, 34), &scale);
+        invn = fix32_invsqrt(SQ(a_x, 34) + SQ(a_y, 34) + SQ(a_z, 34), &scale);
 
         // multiply each vector element by the inverse norm; after this:
         // -1 <= a_x, a_y, a_z <= 1 ; a scaling factor of 2^28 is sufficient,
         // so we shift by an additional 6 bits to get from 2^34 to 2^28:
-        a_x = fix_mul(a_x, invn, scale + 6);
-        a_y = fix_mul(a_y, invn, scale + 6);
-        a_z = fix_mul(a_z, invn, scale + 6);
+        a_x = fix32_mul(a_x, invn, scale + 6);
+        a_y = fix32_mul(a_y, invn, scale + 6);
+        a_z = fix32_mul(a_z, invn, scale + 6);
     }
 
     //DEBUG("a / |a| = ", DBG_FIXVEC(a_x, a_y, a_z, 28), "\n");
@@ -91,9 +91,9 @@ void ahrs_update(int32_t a_x, int32_t a_y, int32_t a_z,
     // all values of the attitude quaternion and the acceleration vector are
     // within [-1,1], thus the elements of f_g are within [-4,4]; we choose a
     // scaling factor of 2^28 (the attitude quaternion has a scaling of 2^30):
-    int32_t f_1 = fix_mul(q2, q4, 31) - fix_mul(q1, q3, 31) - a_x,
-            f_2 = fix_mul(q1, q2, 31) + fix_mul(q3, q4, 31) - a_y,
-            f_3 = (1<<28) - fix_mul(q2, q2, 31) - fix_mul(q3, q3, 31) - a_z;
+    int32_t f_1 = fix32_mul(q2, q4, 31) - fix32_mul(q1, q3, 31) - a_x,
+            f_2 = fix32_mul(q1, q2, 31) + fix32_mul(q3, q4, 31) - a_y,
+            f_3 = (1<<28) - fix32_mul(q2, q2, 31) - fix32_mul(q3, q3, 31) - a_z;
 
     //DEBUG("f_g = ", DBG_FIXVEC(f_1, f_2, f_3, 28), "\n");
 
@@ -105,10 +105,10 @@ void ahrs_update(int32_t a_x, int32_t a_y, int32_t a_z,
     // we keep the scaling factor of 2^28 (the attitude quaternion has 2^30)
     // and take care of the factors 2 and 4 during the scaling operations:
     int32_t qhd_1, qhd_2, qhd_3, qhd_4;
-    qhd_1 = fix_mul(q2, f_2, 29) - fix_mul(q3, f_1, 29);
-    qhd_2 = fix_mul(q4, f_1, 29) + fix_mul(q1, f_2, 29) - fix_mul(q2, f_3, 28);
-    qhd_3 = fix_mul(q4, f_2, 29) - fix_mul(q1, f_1, 29) - fix_mul(q3, f_3, 28);
-    qhd_4 = fix_mul(q2, f_1, 29) + fix_mul(q3, f_2, 29);
+    qhd_1 = fix32_mul(q2, f_2, 29) - fix32_mul(q3, f_1, 29);
+    qhd_2 = fix32_mul(q4, f_1, 29) + fix32_mul(q1, f_2, 29) - fix32_mul(q2, f_3, 28);
+    qhd_3 = fix32_mul(q4, f_2, 29) - fix32_mul(q1, f_1, 29) - fix32_mul(q3, f_3, 28);
+    qhd_4 = fix32_mul(q2, f_1, 29) + fix32_mul(q3, f_2, 29);
 
     //DEBUG("qhd = ", DBG_FIXQUAT(qhd_1, qhd_2, qhd_3, qhd_4, 28), "\n");
 
@@ -118,22 +118,22 @@ void ahrs_update(int32_t a_x, int32_t a_y, int32_t a_z,
         // the sum of squares is within [0,64]; use a scaling factor of 2^24,
         // by shifting the squares by an additional 4 bits from 2^28 to 2^24:
         int32_t invn; int scale = 24;
-        invn = fix_invsqrt(SQ(qhd_1, 32) + SQ(qhd_2, 32) + SQ(qhd_3, 32) +
-                           SQ(qhd_4, 32), &scale);
+        invn = fix32_invsqrt(SQ(qhd_1, 32) + SQ(qhd_2, 32) + SQ(qhd_3, 32) +
+                             SQ(qhd_4, 32), &scale);
 
         // multiply the inverse norm with beta; for the result a scaling factor
         // of 2^(scale + BETA_SCALE - 32) is choosen:
-        invn = fix_mul(invn, BETA, 32);
+        invn = fix32_mul(invn, BETA, 32);
 
         // multiply each element of qhd by the inverse norm times beta; after
         // this the range of each value of qhd is [-beta, beta]; regardless, we
         // switch to a scaling factor of 2^26 for qhd (from currently 2^28) due
         // to the subsequent subtraction of qhd from qd (the derivative of q):
         scale = (scale + BETA_SCALE - 32) + (28 - 26); //(20 - 28);
-        qhd_1 = fix_mul(qhd_1, invn, scale);
-        qhd_2 = fix_mul(qhd_2, invn, scale);
-        qhd_3 = fix_mul(qhd_3, invn, scale);
-        qhd_4 = fix_mul(qhd_4, invn, scale);
+        qhd_1 = fix32_mul(qhd_1, invn, scale);
+        qhd_2 = fix32_mul(qhd_2, invn, scale);
+        qhd_3 = fix32_mul(qhd_3, invn, scale);
+        qhd_4 = fix32_mul(qhd_4, invn, scale);
     }
 
     //DEBUG("qhd / |qhd| * beta = ", DBG_FIXQUAT(qhd_1, qhd_2, qhd_3, qhd_4, 26));
@@ -146,10 +146,10 @@ void ahrs_update(int32_t a_x, int32_t a_y, int32_t a_z,
     // hence we use a scaling factor of 2^26 for qd, twice that of the angular
     // rate data, to take into account the factor of 0.5 (i.e. division by 2):
     int32_t qd_1, qd_2, qd_3, qd_4;
-    qd_1 = -fix_mul(q2, w_x, 30) - fix_mul(q3, w_y, 30) - fix_mul(q4, w_z, 30);
-    qd_2 =  fix_mul(q1, w_x, 30) + fix_mul(q3, w_z, 30) - fix_mul(q4, w_y, 30);
-    qd_3 =  fix_mul(q1, w_y, 30) + fix_mul(q4, w_x, 30) - fix_mul(q2, w_z, 30);
-    qd_4 =  fix_mul(q1, w_z, 30) + fix_mul(q2, w_y, 30) - fix_mul(q3, w_x, 30);
+    qd_1 = -fix32_mul(q2, w_x, 30) - fix32_mul(q3, w_y, 30) - fix32_mul(q4, w_z, 30);
+    qd_2 =  fix32_mul(q1, w_x, 30) + fix32_mul(q3, w_z, 30) - fix32_mul(q4, w_y, 30);
+    qd_3 =  fix32_mul(q1, w_y, 30) + fix32_mul(q4, w_x, 30) - fix32_mul(q2, w_z, 30);
+    qd_4 =  fix32_mul(q1, w_z, 30) + fix32_mul(q2, w_y, 30) - fix32_mul(q3, w_x, 30);
 
     //DEBUG("qd = ", DBG_FIXQUAT(qd_1, qd_2, qd_3, qd_4, 26), "\n");
 
@@ -157,10 +157,10 @@ void ahrs_update(int32_t a_x, int32_t a_y, int32_t a_z,
     // subtract the gradient from the derivative estimate and integrate the
     // result over the time interval delta_t (i.e. multiply with delta_t):
     int32_t dq1, dq2, dq3, dq4;
-    dq1 = fix_mul(qd_1 - qhd_1, DELTA_T, DELTA_T_SCALE - 4);
-    dq2 = fix_mul(qd_2 - qhd_2, DELTA_T, DELTA_T_SCALE - 4);
-    dq3 = fix_mul(qd_3 - qhd_3, DELTA_T, DELTA_T_SCALE - 4);
-    dq4 = fix_mul(qd_4 - qhd_4, DELTA_T, DELTA_T_SCALE - 4);
+    dq1 = fix32_mul(qd_1 - qhd_1, DELTA_T, DELTA_T_SCALE - 4);
+    dq2 = fix32_mul(qd_2 - qhd_2, DELTA_T, DELTA_T_SCALE - 4);
+    dq3 = fix32_mul(qd_3 - qhd_3, DELTA_T, DELTA_T_SCALE - 4);
+    dq4 = fix32_mul(qd_4 - qhd_4, DELTA_T, DELTA_T_SCALE - 4);
 
     //DEBUG("(qd - qhd) * delta_t = ", DBG_FIXQUAT(dq1, dq2, dq3, dq4, 30), "\n");
 
@@ -168,9 +168,9 @@ void ahrs_update(int32_t a_x, int32_t a_y, int32_t a_z,
     // delta_t is first multiplied with pi/180 (constant DEG2RAD); the values
     // are converted to the scaling factor of 2^30 of the attitude quaternion:
     //{
-        //int32_t delta_t_deg2rad = fix_mul(DELTA_T, DEG2RAD, 32);
+        //int32_t delta_t_deg2rad = fix32_mul(DELTA_T, DEG2RAD, 32);
         //int scaling = (DELTA_T_SCALE + DEG2RAD_SCALE - 32) + (30 - 20);
-        //q1 += fix_mul(qd_1 - qhd_1, delta_t_deg2rad, scaling);
+        //q1 += fix32_mul(qd_1 - qhd_1, delta_t_deg2rad, scaling);
     //}
 
     // Update attitude quaternion:
@@ -186,14 +186,14 @@ void ahrs_update(int32_t a_x, int32_t a_y, int32_t a_z,
         // calculate inverse norm; should be close to 1, so we keep the scaling
         // factor of 2^30 for the sum of squares:
         int32_t invn; int scale = 30;
-        invn = fix_invsqrt(SQ(q1, 30) + SQ(q2, 30) + SQ(q3, 30) + SQ(q4, 30),
-                           &scale);
+        invn = fix32_invsqrt(SQ(q1, 30) + SQ(q2, 30) + SQ(q3, 30) + SQ(q4, 30),
+                             &scale);
 
         // multiply each vector element by the inverse norm:
-        q1 = fix_mul(q1, invn, scale);
-        q2 = fix_mul(q2, invn, scale);
-        q3 = fix_mul(q3, invn, scale);
-        q4 = fix_mul(q4, invn, scale);
+        q1 = fix32_mul(q1, invn, scale);
+        q2 = fix32_mul(q2, invn, scale);
+        q3 = fix32_mul(q3, invn, scale);
+        q4 = fix32_mul(q4, invn, scale);
     }
 
     //DEBUG("q / |q| = ", DBG_FIXQUAT(q1, q2, q3, q4, 30), "\n");

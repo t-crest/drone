@@ -50,7 +50,7 @@
 
 // weighted sum:
 #define WGSUM_3(v1, w1, v2, w2, v3, w3, scale)                                 \
-    (fix_mul(v1, w1, scale) + fix_mul(v2, w2, scale) + fix_mul(v3, w3, scale))
+    (fix32_mul(v1, w1, scale) + fix32_mul(v2, w2, scale) + fix32_mul(v3, w3, scale))
 //#define WGSUM_6(v1, w1, v2, w2, v3, w3, v4, w4, v5, w5, v6, w6, n)             \
 //    (WGSUM_3(v1, w1, v2, w2, v3, w3, n) + WGSUM_3(v4, w4, v5, w5, v6, w6, n))
 
@@ -101,16 +101,16 @@ void raffo_update(
 #define I_XI_SCALE  (XI_SCALE - 5)
 #define I_XI_SHIFT  (XI_SCALE + DELTA_T_SCALE - I_XI_SCALE)
     static int32_t i_xi_err[3] = { 0, 0, 0 };
-    i_xi_err[0] += fix_mul(xi_err[0], DELTA_T, I_XI_SHIFT);
-    i_xi_err[1] += fix_mul(xi_err[1], DELTA_T, I_XI_SHIFT);
-    i_xi_err[2] += fix_mul(xi_err[2], DELTA_T, I_XI_SHIFT);
+    i_xi_err[0] += fix32_mul(xi_err[0], DELTA_T, I_XI_SHIFT);
+    i_xi_err[1] += fix32_mul(xi_err[1], DELTA_T, I_XI_SHIFT);
+    i_xi_err[2] += fix32_mul(xi_err[2], DELTA_T, I_XI_SHIFT);
 
     //DEBUG("i_xi     = ", DBG_FIXVEC(i_xi_err[0], i_xi_err[1], i_xi_err[2], I_XI_SCALE), "\n");
 
     // Calculate the yaw angle (resp. the yaw error) from the rotation matrix;
     // yaw angle has a scaling factor of 2^28 (as returned by atan2 function):
-    int32_t yaw_err = fix_atan2(R_W[1][0], R_W[0][0], R_W_SCALE) - yaw_des;
-    //int32_t yaw_err = fix_atan2(R_W[2][1], R_W[2][2], R_W_SCALE) - yaw_des;
+    int32_t yaw_err = fix32_atan2(R_W[1][0], R_W[0][0], R_W_SCALE) - yaw_des;
+    //int32_t yaw_err = fix32_atan2(R_W[2][1], R_W[2][2], R_W_SCALE) - yaw_des;
 
     // TODO: integrate the yaw error as well
 #define I_YAW_SCALE
@@ -119,9 +119,9 @@ void raffo_update(
     // calculating each pair here to avoid redundant multiplications;
     // results are shifted by 31 bits to avoid overflow, thus the resulting
     // pairs have a scaling factor of 2 * OMEGA_SCALE - 31:
-    int32_t pq = fix_mul(omega[0], omega[1], 31),
-            pr = fix_mul(omega[0], omega[2], 31),
-            qr = fix_mul(omega[1], omega[2], 31);
+    int32_t pq = fix32_mul(omega[0], omega[1], 31),
+            pr = fix32_mul(omega[0], omega[2], 31),
+            qr = fix32_mul(omega[1], omega[2], 31);
 #define OMEGA_SQ_SCALE  (2 * (OMEGA_SCALE) - 31)
 
     ////////////////////////////////////////////////////////////////////////////
@@ -139,12 +139,12 @@ void raffo_update(
 #define KI_XI_SHFT  (KI_XI_SCALE + I_XI_SCALE - CTRL_ACC_XI_SCALE)
     SHIFT_CHECK(KI_ROT_SHFT); SHIFT_CHECK(KI_XI_SHFT);
     int32_t KI_q[6] = {
-        0, // fix_mul(fix_mul(i_yaw_err, omega[1], ), KI_P, KI_ROT_SHFT),
-        0, // fix_mul(fix_mul(i_yaw_err, omega[0], ), KI_Q, KI_ROT_SHFT),
-        0, // fix_mul(i_yaw_err, KI_R, KI_ROT_SHFT),
-        fix_mul(KI_XI, i_xi_err[0], KI_XI_SHFT),
-        fix_mul(KI_XI, i_xi_err[1], KI_XI_SHFT),
-        fix_mul(KI_XI, i_xi_err[2], KI_XI_SHFT)
+        0, // fix32_mul(fix32_mul(i_yaw_err, omega[1], ), KI_P, KI_ROT_SHFT),
+        0, // fix32_mul(fix32_mul(i_yaw_err, omega[0], ), KI_Q, KI_ROT_SHFT),
+        0, // fix32_mul(i_yaw_err, KI_R, KI_ROT_SHFT),
+        fix32_mul(KI_XI, i_xi_err[0], KI_XI_SHFT),
+        fix32_mul(KI_XI, i_xi_err[1], KI_XI_SHFT),
+        fix32_mul(KI_XI, i_xi_err[2], KI_XI_SHFT)
     };
 
     //DEBUG("KI*i_xi  = ", DBG_FIXVEC(KI_q[3], KI_q[4], KI_q[5], CTRL_ACC_XI_SCALE), "\n");
@@ -155,12 +155,12 @@ void raffo_update(
 #define KP_XI_SHFT  (KP_XI_SCALE + XI_SCALE - CTRL_ACC_XI_SCALE)
     SHIFT_CHECK(KP_ROT_SHFT); SHIFT_CHECK(KP_XI_SHFT);
     int32_t KP_q[6] = {
-        0, // fix_mul(fix_mul(yaw_err, omega[1], ), KP_P, KP_ROT_SHFT),
-        0, // fix_mul(fix_mul(yaw_err, omega[0], ), KP_Q, KP_ROT_SHFT),
-        fix_mul(yaw_err, KP_R, KP_ROT_SHFT),
-        fix_mul(KP_XI, xi_err[0], KP_XI_SHFT),
-        fix_mul(KP_XI, xi_err[1], KP_XI_SHFT),
-        fix_mul(KP_XI, xi_err[2], KP_XI_SHFT)
+        0, // fix32_mul(fix32_mul(yaw_err, omega[1], ), KP_P, KP_ROT_SHFT),
+        0, // fix32_mul(fix32_mul(yaw_err, omega[0], ), KP_Q, KP_ROT_SHFT),
+        fix32_mul(yaw_err, KP_R, KP_ROT_SHFT),
+        fix32_mul(KP_XI, xi_err[0], KP_XI_SHFT),
+        fix32_mul(KP_XI, xi_err[1], KP_XI_SHFT),
+        fix32_mul(KP_XI, xi_err[2], KP_XI_SHFT)
     };
 
     //DEBUG("KP*xi    = ", DBG_FIXVEC(KP_q[3], KP_q[4], KP_q[5], CTRL_ACC_XI_SCALE), "\n");
@@ -172,12 +172,12 @@ void raffo_update(
 #define KD_XI_SHFT  (KD_XI_SCALE + D_XI_SCALE - CTRL_ACC_XI_SCALE)
     SHIFT_CHECK(KD_R1_SHFT); SHIFT_CHECK(KD_R2_SHFT); SHIFT_CHECK(KD_XI_SHFT);
     int32_t KD_q[6] = {
-        fix_mul(KD_PP, omega[0], KD_R1_SHFT) + fix_mul(KD_PQR, qr, KD_R2_SHFT),
-        fix_mul(KD_QQ, omega[1], KD_R1_SHFT) + fix_mul(KD_QPR, pr, KD_R2_SHFT),
-        fix_mul(KD_RR, omega[2], KD_R1_SHFT) + fix_mul(KD_RPQ, pq, KD_R2_SHFT),
-        fix_mul(KD_XI, d_xi_err[0], KD_XI_SHFT),
-        fix_mul(KD_XI, d_xi_err[1], KD_XI_SHFT),
-        fix_mul(KD_XI, d_xi_err[2], KD_XI_SHFT)
+        fix32_mul(KD_PP, omega[0], KD_R1_SHFT) + fix32_mul(KD_PQR, qr, KD_R2_SHFT),
+        fix32_mul(KD_QQ, omega[1], KD_R1_SHFT) + fix32_mul(KD_QPR, pr, KD_R2_SHFT),
+        fix32_mul(KD_RR, omega[2], KD_R1_SHFT) + fix32_mul(KD_RPQ, pq, KD_R2_SHFT),
+        fix32_mul(KD_XI, d_xi_err[0], KD_XI_SHFT),
+        fix32_mul(KD_XI, d_xi_err[1], KD_XI_SHFT),
+        fix32_mul(KD_XI, d_xi_err[2], KD_XI_SHFT)
     };
     // TODO: add desired yaw rate
 
@@ -204,9 +204,9 @@ void raffo_update(
 #define CORIO_SHFT  (I_SCALE + OMEGA_SQ_SCALE - GAMMA_TORQUE_SCALE)
     SHIFT_CHECK(CORIO_SHFT);
     int32_t Corio_omega[3] = {
-        fix_mul(I_ZZ - I_YY, qr, CORIO_SHFT),
-        fix_mul(I_XX - I_ZZ, pr, CORIO_SHFT),
-        fix_mul(I_YY - I_XX, pq, CORIO_SHFT)
+        fix32_mul(I_ZZ - I_YY, qr, CORIO_SHFT),
+        fix32_mul(I_XX - I_ZZ, pr, CORIO_SHFT),
+        fix32_mul(I_YY - I_XX, pq, CORIO_SHFT)
     };
 
     // Calculate Gamma, i.e. the desired torques and forces. Equivalent to the
@@ -216,12 +216,12 @@ void raffo_update(
 #define GAMMA_FORCE_SHFT    (CTRL_ACC_XI_SCALE + MASS_SCALE - GAMMA_FORCE_SCALE)
     SHIFT_CHECK(GAMMA_TORQUE_SHFT); SHIFT_CHECK(GAMMA_FORCE_SHFT);
     int32_t Gamma[6] = {
-        fix_mul(ctrl_accel[0], I_XX, GAMMA_TORQUE_SHFT) + Corio_omega[0],
-        fix_mul(ctrl_accel[1], I_YY, GAMMA_TORQUE_SHFT) + Corio_omega[1],
-        fix_mul(ctrl_accel[2], I_ZZ, GAMMA_TORQUE_SHFT) + Corio_omega[2],
-        fix_mul(ctrl_accel[3], MASS, GAMMA_FORCE_SHFT),
-        fix_mul(ctrl_accel[4], MASS, GAMMA_FORCE_SHFT),
-        fix_mul(ctrl_accel[5], MASS, GAMMA_FORCE_SHFT) + G_MASS
+        fix32_mul(ctrl_accel[0], I_XX, GAMMA_TORQUE_SHFT) + Corio_omega[0],
+        fix32_mul(ctrl_accel[1], I_YY, GAMMA_TORQUE_SHFT) + Corio_omega[1],
+        fix32_mul(ctrl_accel[2], I_ZZ, GAMMA_TORQUE_SHFT) + Corio_omega[2],
+        fix32_mul(ctrl_accel[3], MASS, GAMMA_FORCE_SHFT),
+        fix32_mul(ctrl_accel[4], MASS, GAMMA_FORCE_SHFT),
+        fix32_mul(ctrl_accel[5], MASS, GAMMA_FORCE_SHFT) + G_MASS
     };
 
     // Transform the forces vector into body frame coordinates by multiplying
