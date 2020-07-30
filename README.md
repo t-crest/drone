@@ -10,3 +10,16 @@ Alternatively, initialize the submodules after fetching the main repository:
     $ git clone https://github.com/t-crest/drone.git
     $ cd drone
     $ git submodule update --init --recursive
+
+## Build Instructions
+
+First, build the fixed-point arithmetic math library:
+
+    $ cd drone/libfix32math
+    $ make
+
+Then, build and simulate the controller:
+
+    $ cd drone/src
+    $ make
+    $ pasim drone.elf
