@@ -18,6 +18,12 @@ First, build the fixed-point arithmetic math library:
     $ cd drone/libfix32math
     $ make
 
+Then, ensure that you have python 3 installed with the following packages: `numpy`, `sympy`, `matplotlib`. This can be done using `pip3`:
+
+```
+pip3 numpy, sympy, matplotlib
+```
+
 Then, build and simulate the controller:
 
     $ cd drone/src
